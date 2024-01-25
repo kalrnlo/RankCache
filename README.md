@@ -1,14 +1,13 @@
-# Whitehill RankCache
+# RankCache
 
-Whitehill RankCache is a library designed to make it easier to obtain up-to-date group ranking information across all of your in-game scripts.
+RankCache is a library designed to make it easier to obtain up-to-date group ranking information across all of your in-game scripts.
 
 **Why use this over :GetRankInGroup/:GetRoleInGroup?**
 - This library ensures that you get up-to-date rank information whilst keeping API requests to a minimum.
-- It provides full control over when rank data is refreshed.
-
-⚠️ Knowledge of Roblox scripting is required to use this library.
-
----
+- It provides almost full control over when rank data is refreshed, through the use of being able
+- to change the refresh time to whatever you'd like.
+- Its this way so that there should be minimal yielding when ever any of the methods are called,
+- as its not doing the api requests within any of the methods except for ForceRefresh.
 
 ## Installation methods
 
@@ -29,19 +28,25 @@ Whitehill RankCache is a library designed to make it easier to obtain up-to-date
 
 ## Basic Usage
 ```lua
-local rankCache = require(game:GetService('ReplicatedStorage').RankCache)
+local RankCache = require(game:GetService("ReplicatedStorage").RankCache)
+
+RankCache.Config.DefualtGroupId = 23930122
+RankCache.Init()
+
+-- Fetches Player1's role and rank for group 1234
+local Role, Rank = RankCache.GetRoleAndRank(game.Players.Player1, 1234)
 
 -- Fetches Player1's rank for group 1234
-local player1Rank = rankCache:GetPlayerRank(game.Players.Player1, 1234)
+local Rank = RankCache.GetRank(game.Players.Player1, 1234)
 
 -- Fetches Player1's role for group 1234
-local player1Role = rankCache:GetPlayerRole(game.Players.Player1, 1234)
+local Role = RankCache.GetRole(game.Players.Player1, 1234)
 
--- Fetches Player2's rank for the configured default group
-local player2Rank = rankCache:GetPlayerRank(game.Players.Player2)
+-- Checks if Player1 is in group 1234
+local Sucess = RankCache.IsInGroup(game.Players.Player1, 1234)
 
--- Fetches Player2's role for the configured default group
-local player2Role = rankCache:GetPlayerRole(game.Players.Player2)
+-- Forces a refesh in the cache for Player1
+local Sucess = RankCache.ForceRefresh(game.Players.Player1)
 ```
 
 More examples are available in the [examples](https://github.com/WhitehillGroup/RankCache/tree/main/examples) folder.
