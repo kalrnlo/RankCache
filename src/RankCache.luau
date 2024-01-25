@@ -37,7 +37,7 @@ type PlayerData = {
 -- [2] == 1 = Specific, 2 = Global
 -- [3] == OptionalGroupIdSpeciferParam
 type CallbackData = {
-	["1"]: RankChangedCallback,
+	["1"]: RankChangedCallback | GlobalRankChangedCallback,
 	["2"]: number,
 	["3"]: number?,
 }
