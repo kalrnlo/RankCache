@@ -1,41 +1,7 @@
---[[
-    Whitehill Rank Cache Module
-    Author: TheCakeChicken
+--!optimize 2
+--!native
+--!strict
 
-    This module can be required from both the client and the server.
-
-    This module is designed to provide the developer with greater control over how group ranks/roles are handled in their game.
-    Games which rely on these usually use Player:GetRankInGroup, which caches even after a player rejoins.
-
-    You may wish to consider implementing a server script to fetch/clear this data when a player joins/leaves
-    to ensure that when a player rejoins the game, the latest ranking information is fetched and used.
-
-    TO SETUP:
-        - Place this ModuleScript into ReplicatedStorage
-        - Set relevant settings in the config table
-
-    USAGE:
-        -- Load the library
-        local rankCache = require(game.ReplicatedStorage.RankCache)
-
-        -- Fetches Player1's rank for group 1234
-        local player1Rank = rankCache:GetPlayerRank(game.Players.Player1, 1234)
-
-        -- Fetches Player1's role for group 1234
-        local player1Role = rankCache:GetPlayerRole(game.Players.Player1, 1234)
-
-        -- Fetches Player2's rank for the configured default group
-        local player2Rank = rankCache:GetPlayerRank(game.Players.Player2)
-
-        -- Fetches Player2's role for the configured default group
-        local player2Role = rankCache:GetPlayerRole(game.Players.Player2)
-
-
-    More advanced usage can be found within the GitHub repository.
-
-    Need help?
-    Check out the example scripts available in the GitHub repository
-]]
 local GroupService = game:GetService("GroupService")
 local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
@@ -55,7 +21,7 @@ type RankCacheConfig = {
 -- GroupDataFormat 
 -- 1 byte for rank, 1 byte for role string length, rest is role string
 -- [2] {[DataIndex] = GroupData}
-type PlayerCacheData = {
+type PlayerData = {
 	["1"]: {number},
 	["2"]: {buffer}
 }
@@ -69,19 +35,52 @@ type CallbackData = {
 	["3"]: number?,
 }
 
-local PlayerCache = table.create(Players.MaxPlayers) :: {PlayerCacheData}
 local PlayerCachePositions = table.create(Players.MaxPlayers) :: {Player}
+local PlayerCache = table.create(Players.MaxPlayers) :: {PlayerData}
+-- {[UserId] = {Thread}}
+local ThreadsWaitingForPlayers = {} :: {[number]: {thread}}
 local RankChangedCallbacks = {} :: {CallbackData}
 local Config = {
-	--// Specifies the group ID to use when no groupId is provided
 	GroupRefreshRate = 120,
 	DefualtGroupId = 0,
 }
 
-local module = {}
+-- TODO: implement callback runner
+local function RunCallbacks(Player: Player, NewPlayerData: PlayerData, OldPlayerData: PlayerData)
 
-local function RefreshPlayerGroups(UserId: number, )
+	for _, Callback in RankChangedCallbacks do
+		task.spawn(Callback[1], Player, NewRank, OldRank)
+	end
+end
 
+local function RefreshPlayerGroups(Player: Player, CachePosition: number, PlayerData: PlayerData)
+	local Sucess, Groups = pcall(function(UserId: number)
+		return GroupService:GetGroupsAsync(UserId)
+	end, Player.UserId)
+	
+	if Sucess then
+		local GroupBuffers = table.create(#Groups)
+		local GroupIds = table.create(#Groups)
+		
+		for Index, Group in Groups do
+			local GroupBuffer = buffer.create(1 + #Group.Role)
+			buffer.writestring(GroupBuffer, 1, Group.Role)
+			buffer.writeu8(GroupBuffer, 0, Group.Rank)
+
+			GroupBuffers[Index] = GroupBuffer
+			GroupIds[Index] = Group.Id
+		end
+		local NewPlayerData = table.create(2) :: PlayerData
+		NewPlayerData[2] = GroupBuffers
+		NewPlayerData[1] = GroupIds
+
+		task.spawn(RunCallbacks, Player, NewPlayerData, OldPlayerData)
+		PlayerCache[CachePosition] = NewPlayerData
+		return true
+	else
+		warn(`[RankCache] RefreshPlayerGroups couldn't get groups for Player {Player.UserId}\n\tGetGroupsAsyncError: {Groups}`)
+		return false
+	end
 end
 
 local OnRankChanged: OnRankChanged = function(CallbackOrGroupId, Callback)
@@ -94,7 +93,7 @@ local OnRankChanged: OnRankChanged = function(CallbackOrGroupId, Callback)
 	CallbackData[2] = 1
 
 	if IsGroupIdNotDefualt then
-		CallbackData[2] = GroupId
+		CallbackData[3] = GroupId
 	end
 	table.insert(RankChangedCallbacks, CallbackData)
 
