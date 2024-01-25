@@ -3,8 +3,9 @@
 --!strict
 
 -- RankCache
--- A rewritten version of Whitehill Groups RankCache designed to overtime refresh the cache, 
--- so players arent forced to rejoin to get their rank refreshed.
+-- A rewritten version of Whitehill Groups RankCache designed to overtime refresh the cache automatically, 
+-- so players arent forced to rejoin to get their rank refreshed. This version also has the ability to register
+-- callbacks for whenever a players rank changes in a group or in litterally any group with GlobalOnRankChanged.
 -- @Kalrnlo, @TheCakeChicken
 -- 25/1/2024
 
@@ -248,7 +249,7 @@ local OnRankChanged: OnRankChanged = function(CallbackOrGroupId, Callback)
 	end
 end
 
-local function OnGlobalRankChanged(Callback: GlobalRankChangedCallback)
+local function GlobalOnRankChanged(Callback: GlobalRankChangedCallback)
 	local CallbackData = table.create(2) :: CallbackData
 	CallbackData[1] = Callback
 	CallbackData[2] = 2
@@ -341,7 +342,7 @@ local function Init()
 end
 
 local RankCache = {
-	OnGlobalRankChanged = OnGlobalRankChanged,
+	GlobalOnRankChanged = GlobalOnRankChanged,
 	GetRoleAndRank = GetRoleAndRank,
 	OnRankChanged = OnRankChanged,
 	ForceRefresh = ForceRefresh,
