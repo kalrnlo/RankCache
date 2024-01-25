@@ -85,8 +85,8 @@ local function RefreshPlayerGroups(UserId: number, )
 end
 
 local OnRankChanged: OnRankChanged = function(CallbackOrGroupId, Callback)
+	local GroupId = if typeof(CallbackOrGroupId) == "function" then Config.DefualtGroupId else CallbackOrGroupId
 	local Callback = if typeof(CallbackOrGroupId) == "function" then CallbackOrGroupId else Callback
-	local GroupId = if not Callback then Config.DefualtGroupId else CallbackOrGroupId
 	local IsGroupIdNotDefualt = GroupId ~= Config.DefualtGroupId
 			
 	local CallbackData = table.create(if IsGroupIdNotDefualt then 3 else 2) :: CallbackData
