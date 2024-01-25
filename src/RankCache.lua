@@ -2,6 +2,12 @@
 --!native
 --!strict
 
+-- RankCache
+-- A rewritten version of Whitehill Groups RankCache designed to overtime refresh the cache, 
+-- so players arent forced to rejoin to get their rank refreshed.
+-- @Kalrnlo, @TheCakeChicken
+-- 25/1/2024
+
 local GroupService = game:GetService("GroupService")
 local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
@@ -15,14 +21,14 @@ export type RankChangedCallback = (Player: Player, NewRank: number, OldRank: num
 type RankCacheConfig = {
 	GroupRefreshRate: number,
 	DefualtGroupId: number,
+	[string] = nil
 }
 
--- [1] = {[DataIndex] = GroupId}
--- GroupDataFormat 
--- 1 byte for rank, 1 byte for role string length, rest is role string
--- [2] {[DataIndex] = GroupData}
+-- GroupBufferFormat 
+-- 1 byte for rank, rest is role string
+-- {[1] = LastTimeChecked, [2] = {[GroupId] = {GroupBuffer}}}
 type PlayerData = {
-	["1"]: {number},
+	["1"]: number,
 	["2"]: {buffer}
 }
 
@@ -35,52 +41,191 @@ type CallbackData = {
 	["3"]: number?,
 }
 
-local PlayerCachePositions = table.create(Players.MaxPlayers) :: {Player}
-local PlayerCache = table.create(Players.MaxPlayers) :: {PlayerData}
+-- {[PlayerPosition] = PlayerData}
+local PlayerCache = table.create(Players.MaxPlayers) :: {[number]: PlayerData}
+local PlayerPositions = table.create(Players.MaxPlayers) :: {Player}
 -- {[UserId] = {Thread}}
-local ThreadsWaitingForPlayers = {} :: {[number]: {thread}}
+local PlayerWaitingThreads = {} :: {[number]: {thread}}
 local RankChangedCallbacks = {} :: {CallbackData}
+local FreeThreads = {} :: {thread}
+local HasInitiated = false
 local Config = {
 	GroupRefreshRate = 120,
 	DefualtGroupId = 0,
-}
+} :: RankCacheConfig
 
--- TODO: implement callback runner
-local function RunCallbacks(Player: Player, NewPlayerData: PlayerData, OldPlayerData: PlayerData)
+-- Fast Spawner taken from: https://github.com/red-blox/Util/blob/main/libs/Spawn/Spawn.luau
+local function RunCallback(Callback, Thread, ...)
+	Callback(...)
+	table.insert(FreeThreads, Thread)
+end
 
-	for _, Callback in RankChangedCallbacks do
-		task.spawn(Callback[1], Player, NewRank, OldRank)
+local function Yielder()
+	while true do
+		RunCallback(coroutine.yield())
 	end
 end
 
-local function RefreshPlayerGroups(Player: Player, CachePosition: number, PlayerData: PlayerData)
+local function Spawn<T...>(Callback: (T...) -> (), ...: T...)
+	local Thread
+	if #FreeThreads > 0 then
+		Thread = FreeThreads[#FreeThreads]
+		FreeThreads[#FreeThreads] = nil
+	else
+		Thread = coroutine.create(Yielder)
+		coroutine.resume(Thread)
+	end
+
+	task.spawn(Thread, Callback, Thread, ...)
+end
+
+local function GetCurrentGroups(Player: Player): {buffer}
 	local Sucess, Groups = pcall(function(UserId: number)
 		return GroupService:GetGroupsAsync(UserId)
 	end, Player.UserId)
 	
 	if Sucess then
-		local GroupBuffers = table.create(#Groups)
-		local GroupIds = table.create(#Groups)
+		local NewGroupData = {} :: PlayerData
 		
-		for Index, Group in Groups do
+		for _, Group in Groups do
 			local GroupBuffer = buffer.create(1 + #Group.Role)
 			buffer.writestring(GroupBuffer, 1, Group.Role)
 			buffer.writeu8(GroupBuffer, 0, Group.Rank)
 
-			GroupBuffers[Index] = GroupBuffer
-			GroupIds[Index] = Group.Id
+			NewGroupData[Group.Id] = GroupBuffer
 		end
-		local NewPlayerData = table.create(2) :: PlayerData
-		NewPlayerData[2] = GroupBuffers
-		NewPlayerData[1] = GroupIds
+		return NewGroupData
+	else
+		warn(`[RankCache] GetCurrentGroups couldn't get groups for Player {Player.UserId}\n\tGetGroupsAsyncError: {Groups}`)
+		return {}
+	end
+end
 
-		task.spawn(RunCallbacks, Player, NewPlayerData, OldPlayerData)
-		PlayerCache[CachePosition] = NewPlayerData
+local function RunCallbacks(Player: Player, NewGroupData: {buffer}, OldGroupData: {buffer})
+	for GroupId, GroupBuffer in NewGroupData do
+		local NewRank = buffer.readu8(GroupBuffer, 0)
+		local OldGroupBuffer = OldGroupData[GroupId]
+		local OldRank = 0
+
+		if OldGroupBuffer then
+			OldRank = buffer.readu8(OldGroupBuffer, 0)
+		end
+
+		if NewRank ~= OldRank then
+			for _, CallbackData in RankChangedCallbacks do
+				if CallbackData[3] == GroupId then
+					Spawn(Callback[1], Player, NewRank, OldRank)
+				elseif CallbackData[2] == 2 then
+					Spawn(Callback[1], GroupId, Player, NewRank, OldRank)
+				end
+			end
+		end
+	end
+end
+
+local function RefreshPlayerGroups(Player: Player, PlayerPosition: number, GroupData: {buffer})
+	local NewGroupData = GetCurrentGroups(Player)
+	
+	if Groups then
+		Spawn(RunCallbacks, Player, NewGroupData, GroupData)
+		PlayerCache[PlayerPosition][2] = NewGroupData
 		return true
 	else
-		warn(`[RankCache] RefreshPlayerGroups couldn't get groups for Player {Player.UserId}\n\tGetGroupsAsyncError: {Groups}`)
 		return false
 	end
+end
+
+local function OnPostSimulation(DeltaTime: number)
+	for Position, PlayerData in PlayerCache do
+		local Diffrence = (os.clock() - DeltaTime) - PlayerData[1]		
+
+		if Diffrence >= Config.GroupRefreshRate then
+			PlayerData[1] = os.clock()
+			Spawn(
+				RefreshPlayerGroups,
+				PlayerPositions[Position],
+				Position,
+				PlayerData[2]
+			)
+		end
+	end
+end
+
+local function OnPlayerRemoving(Player: Player)
+	for Position, PlayerAtPosition in PlayerPositions do
+		if PlayerAtPosition == Player then
+			PlayerPositions[Position] = nil
+			break
+		end
+	end
+end
+
+local function OnPlayerAdded(Player: Player)
+	local ThreadsWaitingForPlayer = ThreadsWaitingForPlayers[Player.UserId]
+	local PlayerData = table.create(2)
+	local PlayerPosition
+
+	for Position, PlayerAtPosition in PlayerPositions do
+		if not PlayerAtPosition then
+			PlayerPositions[Position] = Player
+			PlayerPosition = Position
+			break
+		end
+	end
+
+	PlayerData[2] = GetCurrentGroups(Player)
+	PlayerData[1] = os.clock()
+	PlayerCache[PlayerPosition] = PlayerData
+
+	if ThreadsWaitingForPlayer then
+		for _, Thread in ThreadsWaitingForPlayer do
+			task.spawn(Thread, PlayerData, PlayerPosition)
+		end
+		ThreadsWaitingForPlayers[Player.UserId] = nil
+	end
+	-- this is here just incase if the player doesnt get removed by the player removing callback
+	-- never had an issue with that, but it might happen so this is here
+	if not Player:IsDescendantOf(Players) then
+		PlayerPositions[PlayerPosition] = nil
+	end
+end
+
+-- Returns PlayerData, PlayerPosition
+local function GetPlayerData(Player: Player): (PlayerData?, number)
+	local PlayerPosition = table.find(PlayerPositions, Player)
+
+	if PlayerPosition then
+		return PlayerCache[PlayerPosition], PlayerPosition 
+	elseif Player:IsDescendantOf(Players) then
+		local PlayerThreads = PlayerWaitingThreads[Player.UserId]
+
+		if PlayerThreads then
+			table.insert(PlayerThreads, coroutine.running())
+		else
+			PlayerWaitingThreads[Player.UserId] = table.create(1, coroutine.running())
+		end
+		return coroutine.yield()
+	else
+		return nil, -1
+	end
+end
+
+local function GetRoleAndRank(Player: Player, GroupId: number?): (string, number)
+	local GroupId = if GroupId then GroupId else Config.DefualtGroupId
+	local PlayerData = GetPlayerData(Player)
+	
+	if PlayerData then
+		local GroupBuffer = PlayerData[2][GroupId]
+
+		if GroupBuffer then
+			local Role = buffer.readstring(GroupBuffer, 1, buffer.len(GroupBuffer) - 1)
+			local Rank = buffer.readu8(GroupBuffer, 0)
+
+			return Role, Rank
+		end
+	end
+
+	return "Guest", 0
 end
 
 local OnRankChanged: OnRankChanged = function(CallbackOrGroupId, Callback)
@@ -114,84 +259,97 @@ local function OnGlobalRankChanged(Callback: GlobalRankChangedCallback)
 	end
 end
 
-module.dataCache = setmetatable({}, {
-	__index = function(t,i)
-		t[i] = setmetatable({}, {__index = function(t_,i_) t_[i_] = {} return t_[i_] end})
-		return t[i]
-	end
-})
-
-module.FetchPlayerInfo = function(self, player, groupId)
-	if (not groupId and not config.DefaultGroupID) then
-		return error("Attempt to fetch player rank without specifying group. Is a default group set?")
-	elseif (not groupId and config.DefaultGroupID) then
-		groupId = config.DefaultGroupID
-	end
-
-	local isSuccess, usrGroups = pcall(function() return GroupService:GetGroupsAsync(player.UserId) end)
-
-    --// If the request failed, return a default value but do not store to the cache, so subsequent requests will attempt to fetch new data
-    if (not isSuccess) then
-        warn("[RankCache] Failed to fetch group (ID: " .. groupId .. ") data for " .. player.Name .. " (" .. player.UserId .. ")");
-
-        return {
-            Rank = 0;
-            Role = "Guest";
-        }
-    end
-
-	local playerRank = 0
-	local playerRole = "Guest"
-
-	for _, group in pairs(usrGroups) do
-		if group.Id == groupId then
-			playerRank = group.Rank;
-			playerRole = group.Role;
-
-			break;
+local function IsInGroup(Player: Player, GroupId: number?): boolean
+	local GroupId = if GroupId then GroupId else Config.DefualtGroupId
+	local PlayerData = GetPlayerData(Player)
+		
+	if PlayerData then
+		local GroupBuffer = PlayerData[2][GroupId]
+	
+		if GroupBuffer then
+			return buffer.readu8(GroupBuffer, 0) > 0
 		end
 	end
 
-	self.dataCache[player.UserId][groupId] = {
-		Rank = playerRank;
-		Role = playerRole;
-	}
-
-	return self.dataCache[player.UserId][groupId]
+	return false
 end
 
-module.ClearPlayerInfo = function(self, player)
-	self.dataCache[player.UserId] = nil
+local function GetRole(Player: Player, GroupId: number?): string
+	local GroupId = if GroupId then GroupId else Config.DefualtGroupId
+	local PlayerData = GetPlayerData(Player)
+		
+	if PlayerData then
+		local GroupBuffer = PlayerData[2][GroupId]
+	
+		if GroupBuffer then
+			return buffer.readstring(GroupBuffer, 1, buffer.len(GroupBuffer) - 1)
+		end
+	end
+
+	return "Guest"
 end
 
-module.GetPlayerRank = function(self, player, groupId)
-	if (not groupId and not config.DefaultGroupID) then
-		return error("Attempt to fetch player rank without specifying group. Is a default group set?")
-	elseif (not groupId and config.DefaultGroupID) then
-		groupId = config.DefaultGroupID
+local function GetRank(Player: Player, GroupId: number?): number
+	local GroupId = if GroupId then GroupId else Config.DefualtGroupId
+	local PlayerData = GetPlayerData(Player)
+		
+	if PlayerData then
+		local GroupBuffer = PlayerData[2][GroupId]
+	
+		if GroupBuffer then
+			return buffer.readu8(GroupBuffer, 0)
+		end
 	end
 
-	if self.dataCache[player.UserId][groupId].Rank then
-		return self.dataCache[player.UserId][groupId].Rank
-	end
-
-	local data = self:FetchPlayerInfo(player, groupId)
-	return data.Rank
+	return 0
 end
 
-module.GetPlayerRole = function(self, player, groupId)
-	if (not groupId and not config.DefaultGroupID) then
-		return error("Attempt to fetch player rank without specifying group. Is a default group set?")
-	elseif (not groupId and config.DefaultGroupID) then
-		groupId = config.DefaultGroupID
-	end
+local function ForceRefresh(Player: Player): boolean
+	local PlayerData, PlayerPosition = GetPlayerData(Player)
 
-	if self.dataCache[player.UserId][groupId].Role then
-		return self.dataCache[player.UserId][groupId].Role
+	if PlayerData then
+		PlayerData[1] = os.clock()
+		return RefreshPlayerGroups(Player, PlayerPosition, PlayerData[2])
+	else
+		return false
 	end
-
-	local data = self:FetchPlayerInfo(player, groupId)
-	return data.Role
 end
 
-return module
+local function Init()
+	if HasInitiated then
+		error("[RankCache] Cannot initalize twice without disconnecting first")
+	else
+		HasInitiated = true
+	end
+
+	local RefreshConnection = RunService.PostSimulation:Connect(OnPostSimulation)
+	local RemovingConnection = Players.PlayerRemoving:Connect(OnPlayerRemoving)
+	local AddedConnection = Players.PlayerAdded:Connect(OnPlayerAdded)
+
+	for _, Player in Players:GetPlayers() do
+		if table.find(PlayerPositions, Player) then continue end
+		Spawn(OnPlayerAdded, Player)
+	end
+
+	return function()
+		RemovingConnection:Disconnect()
+		RefreshConnection:Disconnect()
+		AddedConnection:Disconnect()
+		table.clear(PlayerPositions)
+		HasInitiated = false
+	end
+end
+
+local RankCache = {
+	OnGlobalRankChanged = OnGlobalRankChanged,
+	GetRoleAndRank = GetRoleAndRank,
+	OnRankChanged = OnRankChanged,
+	ForceRefresh = ForceRefresh,
+	IsInGroup = IsInGroup,
+	GetRole = GetRole,
+	GetRank = GetRank,
+	Config = Config,
+	Init = Init,
+}
+
+return RankCache
