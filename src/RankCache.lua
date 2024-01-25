@@ -36,15 +36,84 @@
     Need help?
     Check out the example scripts available in the GitHub repository
 ]]
+local GroupService = game:GetService("GroupService")
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
 
-local config = {
+type OnRankChanged = ((Callback: RankChangedCallback) -> () -> ()) & ((GroupId: number, Callback: RankChangedCallback) -> () -> ())
+
+export type GlobalRankChangedCallback = (GroupId: number, Player: Player, NewRank: number, OldRank: number) -> ()
+
+export type RankChangedCallback = (Player: Player, NewRank: number, OldRank: number) -> ()
+
+type RankCacheConfig = {
+	GroupRefreshRate: number,
+	DefualtGroupId: number,
+}
+
+-- [1] = {[DataIndex] = GroupId}
+-- GroupDataFormat 
+-- 1 byte for rank, 1 byte for role string length, rest is role string
+-- [2] {[DataIndex] = GroupData}
+type PlayerCacheData = {
+	["1"]: {number},
+	["2"]: {buffer}
+}
+
+-- [1] = Callback
+-- [2] == 1 = Specific, 2 = Global
+-- [3] == OptionalGroupIdSpeciferParam
+type CallbackData = {
+	["1"]: RankChangedCallback,
+	["2"]: number,
+	["3"]: number?,
+}
+
+local PlayerCache = table.create(Players.MaxPlayers) :: {PlayerCacheData}
+local PlayerCachePositions = table.create(Players.MaxPlayers) :: {Player}
+local RankChangedCallbacks = {} :: {CallbackData}
+local Config = {
 	--// Specifies the group ID to use when no groupId is provided
-	DefaultGroupID = 0;
+	GroupRefreshRate = 120,
+	DefualtGroupId = 0,
 }
 
 local module = {}
 
-local GroupService = game:GetService('GroupService')
+local function RefreshPlayerGroups(UserId: number, )
+
+end
+
+local OnRankChanged: OnRankChanged = function(CallbackOrGroupId, Callback)
+	local Callback = if typeof(CallbackOrGroupId) == "function" then CallbackOrGroupId else Callback
+	local GroupId = if not Callback then Config.DefualtGroupId else CallbackOrGroupId
+	local IsGroupIdNotDefualt = GroupId ~= Config.DefualtGroupId
+			
+	local CallbackData = table.create(if IsGroupIdNotDefualt then 3 else 2) :: CallbackData
+	CallbackData[1] = Callback
+	CallbackData[2] = 1
+
+	if IsGroupIdNotDefualt then
+		CallbackData[2] = GroupId
+	end
+	table.insert(RankChangedCallbacks, CallbackData)
+
+	return function()
+		local Index = table.find(RankChangedCallbacks, CallbackData)
+		table.remove(RankChangedCallbacks, Index)
+	end
+end
+
+local function OnGlobalRankChanged(Callback: GlobalRankChangedCallback)
+	local CallbackData = table.create(2) :: CallbackData
+	CallbackData[1] = Callback
+	CallbackData[2] = 2
+
+	return function()
+		local Index = table.find(RankChangedCallbacks, CallbackData)
+		table.remove(RankChangedCallbacks, Index)
+	end
+end
 
 module.dataCache = setmetatable({}, {
 	__index = function(t,i)
