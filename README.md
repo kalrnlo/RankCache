@@ -53,16 +53,16 @@ local Disconnect = RankCache.GlobalOnRankChanged(function(GroupId, Player, NewRa
     print(`{Player.Name}'s new rank is {NewRank} in group {GroupId}`)
 end)
 
--- Creates a callback to be called whenever a players rank changes in the group 1234
-local Disconnect = RankCache.OnRankChanged(1234, functiion(Player, NewRank, OldRank)
-    print(`{Player.Name}'s new rank is {NewRank} in group 1234`)
-end)
-
 -- Creates a callback to be called whenever a players rank changes in the defualt group
 -- that then immediatly disconnects
 local Disconnect = RankCache.OnRankChanged(functiion(Player, NewRank, OldRank)
-    print(`{Player.Name}'s new rank is {NewRank}`)
+    print(`{Player.Name}'s new rank is {NewRank} in group {RankCache.Config.DefualtGroupId})`)
     Disconnect()
+end)
+
+-- Creates a callback to be called whenever a players rank changes in the group 1234
+local Disconnect = RankCache.OnRankChanged(1234, functiion(Player, NewRank, OldRank)
+    print(`{Player.Name}'s new rank is {NewRank} in group 1234`)
 end)
 ```
 
