@@ -43,10 +43,15 @@ local Rank = RankCache.GetRank(game.Players.Player1, 1234)
 local Role = RankCache.GetRole(game.Players.Player1, 1234)
 
 -- Checks if Player1 is in group 1234
-local Sucess = RankCache.IsInGroup(game.Players.Player1, 1234)
+local IsPlayerInGroup = RankCache.IsInGroup(game.Players.Player1, 1234)
 
 -- Forces a refesh in the cache for Player1
 local Sucess = RankCache.ForceRefresh(game.Players.Player1)
+
+-- Creates a callback thats called whenever any players rank changes in any group
+local Disconnect = RankCache.GlobalOnRankChanged(function(GroupId, Player, NewRank, OldRank)
+    print(`{Player.Name}'s new rank is {NewRank} in group {GroupId}`)
+end)
 
 -- Creates a callback to be called whenever a players rank changes in the group 1234
 local Disconnect = RankCache.OnRankChanged(1234, functiion(Player, NewRank, OldRank)
@@ -54,8 +59,10 @@ local Disconnect = RankCache.OnRankChanged(1234, functiion(Player, NewRank, OldR
 end)
 
 -- Creates a callback to be called whenever a players rank changes in the defualt group
+-- that then immediatly disconnects
 local Disconnect = RankCache.OnRankChanged(functiion(Player, NewRank, OldRank)
     print(`{Player.Name}'s new rank is {NewRank}`)
+    Disconnect()
 end)
 ```
 
