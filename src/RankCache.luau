@@ -98,7 +98,7 @@ local function GetCurrentGroups(Player: Player): {buffer}
 		return NewGroupData
 	else
 		warn(`[RankCache] GetCurrentGroups couldn't get groups for Player {Player.UserId}\n\tGetGroupsAsyncError: {Groups}`)
-		return {}
+		return nil
 	end
 end
 
@@ -108,7 +108,7 @@ local function RunCallbacks(Player: Player, NewGroupData: {buffer}, OldGroupData
 		local OldGroupBuffer = OldGroupData[GroupId]
 		local OldRank = 0
 
-		if OldGroupBuffer then
+		if #OldGroupBuffer > 0 then
 			OldRank = buffer.readu8(OldGroupBuffer, 0)
 		end
 
