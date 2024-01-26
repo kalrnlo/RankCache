@@ -103,22 +103,62 @@ local function GetCurrentGroups(Player: Player): {buffer}
 end
 
 local function RunCallbacks(Player: Player, NewGroupData: {buffer}, OldGroupData: {buffer})
-	for GroupId, GroupBuffer in NewGroupData do
-		local NewRank = buffer.readu8(GroupBuffer, 0)
-		local OldGroupBuffer = OldGroupData[GroupId]
-		local OldRank = 0
+	local Diffrence = math.abs(#NewGroupData - #OldGroupData) 
+	-- 8 bytes for groupid, 1 byte for new rank, 1 byte for old rank
+	local DataBuffer = buffer.create((Diffrence + #OldGroupData) * 10)
+	local GroupIdsChecked = table.create(GroupIdCount)
+	local Offset = 0
+	local Index = 1
 
-		if #OldGroupBuffer > 0 then
-			OldRank = buffer.readu8(OldGroupBuffer, 0)
-		end
+	for GroupId, GroupBuffer in NewGroupData do 
+		local OldGroupBuffer = OldGroupData[GroupId]
+		local OldRank = if OldGroupBuffer then buffer.readu8(OldGroupBuffer, 0) else 0
+		local NewRank = buffer.readu8(GroupBuffer, 0)
+
+		GroupIdsChecked[Index] = GroupId
+		Index += 1
 
 		if NewRank ~= OldRank then
-			for _, CallbackData in RankChangedCallbacks do
-				if CallbackData[3] == GroupId then
-					Spawn(Callback[1], Player, NewRank, OldRank)
-				elseif CallbackData[2] == 2 then
-					Spawn(Callback[1], GroupId, Player, NewRank, OldRank)
-				end
+			buffer.writef64(DataBuffer, Offset, GroupId)
+			Offset += 9
+			buffer.writeu8(DataBuffer, Offset, NewRank)
+			Offset += 1
+			buffer.writeu8(DataBuffer, Offset, OldRank)
+			Offset += 1
+		else
+			buffer.writef64(DataBuffer, Offset, 0)
+			Offset += 1	
+		end
+	end
+
+	for GroupId, GroupBuffer in OldGroupData do
+		if table.find(GroupIdsChecked, GroupId) then continue end
+
+		buffer.writef64(DataBuffer, Offset, GroupId)
+		Offset += 9
+		buffer.writeu8(DataBuffer, Offset, 0)
+		Offset += 1
+		buffer.writeu8(DataBuffer, Offset, buffer.readu8(GroupBuffer, 0))
+		Offset += 1
+	end
+
+	local ReadOffset = 0
+
+	for Index = 1, GroupIdCount do
+		local GroupId = buffer.readf64(DataBuffer, ReadOffset)
+		ReadOffset += 9 
+
+		if GroupId == 0 then continue end
+		local NewRank = buffer.readu8(DataBuffer, ReadOffset)
+		ReadOffset += 1
+		local OldRank = buffer.readu8(DataBuffer, ReadOffset)
+		ReadOffset += 1
+
+		for _, CallbackData in RankChangedCallbacks do
+			if CallbackData[3] == GroupId then
+				Spawn(Callback[1], Player, NewRank, OldRank)
+			elseif CallbackData[2] == 2 then
+				Spawn(Callback[1], GroupId, Player, NewRank, OldRank)
 			end
 		end
 	end
