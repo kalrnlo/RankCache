@@ -103,9 +103,9 @@ local function GetCurrentGroups(Player: Player): {buffer}
 end
 
 local function RunCallbacks(Player: Player, NewGroupData: {buffer}, OldGroupData: {buffer})
-	local Diffrence = math.abs(#NewGroupData - #OldGroupData) 
+	local GroupIdCount = math.abs(#NewGroupData - #OldGroupData) + #OldGroupData
 	-- 8 bytes for groupid, 1 byte for new rank, 1 byte for old rank
-	local DataBuffer = buffer.create((Diffrence + #OldGroupData) * 10)
+	local DataBuffer = buffer.create(GroupIdCount * 10)
 	local GroupIdsChecked = table.create(#NewGroupData)
 	local Offset = 0
 	local Index = 1
@@ -127,7 +127,7 @@ local function RunCallbacks(Player: Player, NewGroupData: {buffer}, OldGroupData
 			Offset += 1
 		else
 			buffer.writef64(DataBuffer, Offset, 0)
-			Offset += 1	
+			Offset += 9
 		end
 	end
 
