@@ -142,17 +142,17 @@ local function RunCallbacks(Player: Player, NewGroupData: {buffer}, OldGroupData
 		Offset += 1
 	end
 
-	local ReadOffset = 0
+	Offset = 0
 
 	for Index = 1, GroupIdCount do
-		local GroupId = buffer.readf64(DataBuffer, ReadOffset)
-		ReadOffset += 9 
+		local GroupId = buffer.readf64(DataBuffer, Offset)
+		Offset += 9 
 
 		if GroupId == 0 then continue end
-		local NewRank = buffer.readu8(DataBuffer, ReadOffset)
-		ReadOffset += 1
-		local OldRank = buffer.readu8(DataBuffer, ReadOffset)
-		ReadOffset += 1
+		local NewRank = buffer.readu8(DataBuffer, Offset)
+		Offset += 1
+		local OldRank = buffer.readu8(DataBuffer, Offset)
+		Offset += 1
 
 		for _, CallbackData in RankChangedCallbacks do
 			if CallbackData[3] == GroupId then
