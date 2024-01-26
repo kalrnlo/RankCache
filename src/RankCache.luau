@@ -98,7 +98,7 @@ local function GetCurrentGroups(Player: Player): {buffer}
 		return NewGroupData
 	else
 		warn(`[RankCache] GetCurrentGroups couldn't get groups for Player {Player.UserId}\n\tGetGroupsAsyncError: {Groups}`)
-		return nil
+		return table.create(1)
 	end
 end
 
