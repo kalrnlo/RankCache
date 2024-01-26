@@ -1,6 +1,6 @@
 # RankCache
 
-RankCache is a library designed to make it easier to obtain up-to-date group ranking information across all of your in-game scripts.
+RankCache is a fully typed library designed to make it easier to obtain up-to-date group ranking information across all of your in-game scripts.
 
 **Why use this over :GetRankInGroup/:GetRoleInGroup?**
 - This library ensures that you get up-to-date rank information whilst keeping API requests to a minimum.
@@ -47,6 +47,16 @@ local Sucess = RankCache.IsInGroup(game.Players.Player1, 1234)
 
 -- Forces a refesh in the cache for Player1
 local Sucess = RankCache.ForceRefresh(game.Players.Player1)
+
+-- Creates a callback to be called whenever a players rank changes in the group 1234
+local Disconnect = RankCache.OnRankChanged(1234, functiion(Player, NewRank, OldRank)
+    print(`{Player.Name}'s new rank is {NewRank} in group 1234`)
+end)
+
+-- Creates a callback to be called whenever a players rank changes in the defualt group
+local Disconnect = RankCache.OnRankChanged(functiion(Player, NewRank, OldRank)
+    print(`{Player.Name}'s new rank is {NewRank}`)
+end)
 ```
 
-More examples are available in the [examples](https://github.com/WhitehillGroup/RankCache/tree/main/examples) folder.
+More examples are available in the [examples](https://github.com/kalrnlo/RankCache/tree/main/examples) folder.
