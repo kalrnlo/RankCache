@@ -2,7 +2,7 @@
     This script outlines basic uses of the RankCache library.
 ]]
 
-local rankCache = require(game:GetService('ReplicatedStorage').RankCache)
+local rankCache = require(game:GetService("ServerStorage").RankCache)
 
 rankCache.Config.DefualtGroupId = 23930122
 rankCache.Init()
