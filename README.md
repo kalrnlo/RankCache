@@ -11,24 +11,14 @@ RankCache is a fully typed library designed to make it easier to obtain up-to-da
 
 ## Installation methods
 
-### Method 1 (recommended): Roblox Model
-1. Take the [Roblox Model](https://www.roblox.com/library/14675990793/RankCache-Library)
-2. Drag into your game via the Toolbox
-3. Parent the module to a place it can be accessed by both the client and server (ideally `ReplicatedStorage`)
-
-### Method 2: GitHub Releases
-1. Download the latest rbxm release from [the GitHub releases](https://github.com/WhitehillGroup/RankCache/releases)
-2. Drag the downloaded file into studio
-3. Parent the module to a place it can be accessed by both the client and server (ideally `ReplicatedStorage`)
-
-### Method 3: Rojo
+### Method 1: Rojo
 1. Download the GitHub repository to your computer.
 2. Install [Rojo](https://rojo.space/) and all associated Studio/VSC plugins.
 3. Use Rojo to sync the RankCache library into your Studio project. (Or build the library using `rojo build -o RankCache.rbxm`)
 
 ## Basic Usage
 ```lua
-local RankCache = require(game:GetService("ReplicatedStorage").RankCache)
+local RankCache = require(game:GetService("ServerStorage").RankCache)
 
 RankCache.Config.DefualtGroupId = 23930122
 RankCache.Init()
