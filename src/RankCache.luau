@@ -252,7 +252,7 @@ local function GetPlayerData(Player: Player): (PlayerData?, number)
 end
 
 local function GetRoleAndRank(Player: Player, GroupId: number?): (string, number)
-	local GroupId = if GroupId then GroupId else Config.DefualtGroupId
+	local GroupId = GroupId or Config.DefualtGroupId
 	local PlayerData = GetPlayerData(Player)
 	
 	if PlayerData then
@@ -301,7 +301,7 @@ local function GlobalOnRankChanged(Callback: GlobalRankChangedCallback)
 end
 
 local function IsInGroup(Player: Player, GroupId: number?): boolean
-	local GroupId = if GroupId then GroupId else Config.DefualtGroupId
+	local GroupId = GroupId or Config.DefualtGroupId
 	local PlayerData = GetPlayerData(Player)
 		
 	if PlayerData then
@@ -316,7 +316,7 @@ local function IsInGroup(Player: Player, GroupId: number?): boolean
 end
 
 local function GetRole(Player: Player, GroupId: number?): string
-	local GroupId = if GroupId then GroupId else Config.DefualtGroupId
+	local GroupId = GroupId or Config.DefualtGroupId
 	local PlayerData = GetPlayerData(Player)
 		
 	if PlayerData then
@@ -331,7 +331,7 @@ local function GetRole(Player: Player, GroupId: number?): string
 end
 
 local function GetRank(Player: Player, GroupId: number?): number
-	local GroupId = if GroupId then GroupId else Config.DefualtGroupId
+	local GroupId = GroupId or Config.DefualtGroupId
 	local PlayerData = GetPlayerData(Player)
 		
 	if PlayerData then
