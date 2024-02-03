@@ -42,11 +42,11 @@ type CallbackData = {
 	["2"]: number,
 }
 
--- {[UserId] = PlayerData}
-local PlayerCache = table.create(Players.MaxPlayers) :: {[number]: PlayerData}
 -- {[UserId] = {Thread}}
 local PlayerWaitingThreads = {} :: {[number]: {thread}}
 local RankChangedCallbacks = {} :: {CallbackData}
+-- {[UserId] = PlayerData}
+local PlayerCache = {} :: {[number]: PlayerData}
 local FreeThreads = {} :: {thread}
 local HasInitiated = false
 local Config = {
