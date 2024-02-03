@@ -7,7 +7,7 @@
 -- so players arent forced to rejoin to get their rank refreshed. This version also has the ability to register
 -- callbacks for whenever a players rank changes in a group or in litterally any group with GlobalOnRankChanged.
 -- @Kalrnlo, @TheCakeChicken
--- 25/1/2024
+-- 03/02/2024
 
 local GroupService = game:GetService("GroupService")
 local RunService = game:GetService("RunService")
