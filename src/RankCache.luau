@@ -150,12 +150,9 @@ local function RunCallbacks(Player: Player, NewGroupDataAmount: number, NewGroup
 
 	for Index = 1, GroupIdCount do
 		local GroupId = buffer.readf64(DataBuffer, Offset)
-		Offset += 9 
+		Offset += 9
 
-		if GroupId == 0 then 
-			Offset += 2
-			continue
-		end
+		if GroupId == 0 then continue end
 		local NewRank = buffer.readu8(DataBuffer, Offset)
 		Offset += 1
 		local OldRank = buffer.readu8(DataBuffer, Offset)
@@ -171,7 +168,8 @@ local function RunCallbacks(Player: Player, NewGroupDataAmount: number, NewGroup
 	end
 end
 
-local function RefreshPlayerGroups(Player: Player, GroupData: {buffer})
+local function RefreshPlayerGroups(Player: Player?, GroupData: {buffer})
+	if not Player then return false end
 	local NewGroupData, NewGroupDataAmount = GetCurrentGroups(Player)
 	
 	if Groups then
@@ -184,12 +182,12 @@ local function RefreshPlayerGroups(Player: Player, GroupData: {buffer})
 end
 
 local function OnPostSimulation(DeltaTime: number)
-	for Player, PlayerData in PlayerCache do
+	for UserId, PlayerData in PlayerCache do
 		local Diffrence = (os.clock() - DeltaTime) - PlayerData[1]		
 
 		if Diffrence >= Config.GroupRefreshRate then
 			PlayerData[1] = os.clock()
-			Spawn(RefreshPlayerGroups, Player, PlayerData[2])
+			Spawn(RefreshPlayerGroups, Players:GetPlayerFromUserId(UserId), PlayerData[2])
 		end
 	end
 end
