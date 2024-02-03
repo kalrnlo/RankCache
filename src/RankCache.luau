@@ -78,6 +78,19 @@ local function Spawn<T...>(Callback: (T...) -> (), ...: T...)
 	task.spawn(Thread, Callback, Thread, ...)
 end
 
+local function SwapRemove(CallbackData: CallbackData)
+	local Index = table.find(RankChangedCallbacks, CallbackData)
+
+	if Index then
+		if #RankChangedCallbacks > 1 then
+			RankChangedCallbacks[Index] = RankChangedCallbacks[#RankChangedCallbacks]
+			RankChangedCallbacks[#RankChangedCallbacks] = nil
+		else
+			RankChangedCallbacks[Index] = nil
+		end
+	end
+end
+
 local function GetCurrentGroups(Player: Player): ({buffer}, number)
 	local Sucess, Groups = pcall(function(UserId: number)
 		return GroupService:GetGroupsAsync(UserId)
@@ -257,27 +270,16 @@ local OnRankChanged: OnRankChanged = function(CallbackOrGroupId, Callback)
 	table.insert(RankChangedCallbacks, CallbackData)
 
 	return function()
-		if #RankChangedCallbacks > 1 then
-			local Index = table.find(RankChangedCallbacks, CallbackData)
-			RankChangedCallbacks[Index] = RankChangedCallbacks[#RankChangedCallbacks]
-			RankChangedCallbacks[#RankChangedCallbacks] = nil
-		else
-			RankChangedCallbacks[1] = nil
-		end
+		SwapRemove(CallbackData)
 	end
 end
 
 local function GlobalOnRankChanged(Callback: GlobalRankChangedCallback)
 	local CallbackData = table.create(1, Callback) :: CallbackData
+	table.insert(RankChangedCallbacks, CallbackData)
 
 	return function()
-		if #RankChangedCallbacks > 1 then
-			local Index = table.find(RankChangedCallbacks, CallbackData)
-			RankChangedCallbacks[Index] = RankChangedCallbacks[#RankChangedCallbacks]
-			RankChangedCallbacks[#RankChangedCallbacks] = nil
-		else
-			RankChangedCallbacks[1] = nil
-		end
+		SwapRemove(CallbackData)
 	end
 end
 
