@@ -45,8 +45,7 @@ type CallbackData = {
 -- {[UserId] = {Thread}}
 local PlayerWaitingThreads = {} :: {[number]: {thread}}
 local RankChangedCallbacks = {} :: {CallbackData}
--- {[UserId] = PlayerData}
-local PlayerCache = {} :: {[number]: PlayerData}
+local PlayerCache = {} :: {[Player]: PlayerData}
 local FreeThreads = {} :: {thread}
 local HasInitiated = false
 local Config = {
@@ -168,13 +167,12 @@ local function RunCallbacks(Player: Player, NewGroupDataAmount: number, NewGroup
 	end
 end
 
-local function RefreshPlayerGroups(Player: Player?, GroupData: {buffer})
-	if not Player then return false end
+local function RefreshPlayerGroups(Player: Player, GroupData: {buffer})
 	local NewGroupData, NewGroupDataAmount = GetCurrentGroups(Player)
 	
 	if Groups then
 		Spawn(RunCallbacks, Player, NewGroupDataAmount, NewGroupData, GroupData)
-		PlayerCache[Player.UserId][2] = NewGroupData
+		PlayerCache[Player][2] = NewGroupData
 		return true
 	else
 		return false
@@ -182,12 +180,12 @@ local function RefreshPlayerGroups(Player: Player?, GroupData: {buffer})
 end
 
 local function OnPostSimulation(DeltaTime: number)
-	for UserId, PlayerData in PlayerCache do
+	for Player, PlayerData in PlayerCache do
 		local Diffrence = (os.clock() - DeltaTime) - PlayerData[1]		
 
 		if Diffrence >= Config.GroupRefreshRate then
 			PlayerData[1] = os.clock()
-			Spawn(RefreshPlayerGroups, Players:GetPlayerFromUserId(UserId), PlayerData[2])
+			Spawn(RefreshPlayerGroups, Player, PlayerData[2])
 		end
 	end
 end
@@ -201,7 +199,7 @@ local function OnPlayerAdded(Player: Player)
 	PlayerData[2] = GetCurrentGroups(Player)
 	PlayerData[1] = os.clock()
 
-	PlayerCache[Player.UserId] = PlayerData
+	PlayerCache[Player] = PlayerData
 	local ThreadsWaitingForPlayer = ThreadsWaitingForPlayers[Player.UserId]
 
 	if ThreadsWaitingForPlayer then
@@ -213,14 +211,14 @@ local function OnPlayerAdded(Player: Player)
 	-- this is here just incase if the player doesnt get removed by the player removing callback
 	-- never had an issue with that, but it might happen so this is here
 	if not Player:IsDescendantOf(Players) then
-		PlayerCache[Player.UserId] = nil
+		PlayerCache[Player] = nil
 	end
 end
 
 -- Returns PlayerData, PlayerPosition
 local function GetPlayerData(Player: Player): PlayerData?
-	if PlayerCache[Player.UserId] then
-		return PlayerCache[Player.UserId]
+	if PlayerCache[Player] then
+		return PlayerCache[Player]
 	elseif Player:IsDescendantOf(Players) then
 		local PlayerThreads = PlayerWaitingThreads[Player.UserId]
 
@@ -243,10 +241,8 @@ local function GetRoleAndRank(Player: Player, GroupId: number?): (string, number
 		local GroupBuffer = PlayerData[2][GroupId]
 
 		if GroupBuffer then
-			local Role = buffer.readstring(GroupBuffer, 1, buffer.len(GroupBuffer) - 1)
-			local Rank = buffer.readu8(GroupBuffer, 0)
-
-			return Role, Rank
+			return buffer.readstring(GroupBuffer, 1, buffer.len(GroupBuffer) - 1), 
+				buffer.readu8(GroupBuffer, 0)
 		end
 	end
 
@@ -353,7 +349,7 @@ local function Init()
 	local AddedConnection = Players.PlayerAdded:Connect(OnPlayerAdded)
 
 	for _, Player in Players:GetPlayers() do
-		if PlayerCache[Player.UserId] then continue end
+		if PlayerCache[Player] then continue end
 		Spawn(OnPlayerAdded, Player)
 	end
 
@@ -361,7 +357,9 @@ local function Init()
 		RemovingConnection:Disconnect()
 		RefreshConnection:Disconnect()
 		AddedConnection:Disconnect()
-		table.clear(PlayerCache)
+		for Player in PlayerCache do
+			PlayerCache[Player] = nil
+		end
 		HasInitiated = false
 	end
 end
