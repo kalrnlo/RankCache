@@ -79,7 +79,7 @@ local function Spawn<T...>(Callback: (T...) -> (), ...: T...)
 	task.spawn(Thread, Callback, Thread, ...)
 end
 
-local function GetCurrentGroups(Player: Player): {buffer}
+local function GetCurrentGroups(Player: Player): ({buffer}, number)
 	local Sucess, Groups = pcall(function(UserId: number)
 		return GroupService:GetGroupsAsync(UserId)
 	end, Player.UserId)
@@ -94,17 +94,23 @@ local function GetCurrentGroups(Player: Player): {buffer}
 
 			NewGroupData[Group.Id] = GroupBuffer
 		end
-		return NewGroupData
+		return NewGroupData, #Groups
 	else
 		warn(`[RankCache] GetCurrentGroups couldn't get groups for Player {Player.UserId}\n\tGetGroupsAsyncError: {Groups}`)
-		return table.create(1)
+		return table.create(1), 0
 	end
 end
 
-local function RunCallbacks(Player: Player, NewGroupData: {buffer}, OldGroupData: {buffer})
+local function RunCallbacks(Player: Player, NewGroupDataAmount: number, NewGroupData: {buffer}, OldGroupData: {buffer})
+	local OldGroupDataAmount = 0
+
+	for _ in OldGroupData do
+		OldGroupDataAmount += 1
+	end
+	local GroupIdCount = (math.abs(NewGroupDataAmount - OldGroupDataAmount) + OldGroupDataAmount
+	local GroupIdsChecked = table.create(NewGroupDataAmount)
 	-- 8 bytes for groupid, 1 byte for new rank, 1 byte for old rank
-	local DataBuffer = buffer.create((math.abs(#NewGroupData - #OldGroupData) + #OldGroupData) * 10)
-	local GroupIdsChecked = table.create(#NewGroupData)
+	local DataBuffer = buffer.create(GroupIdCount * 10)
 	local Offset = 0
 	local Index = 1
 
@@ -163,10 +169,10 @@ local function RunCallbacks(Player: Player, NewGroupData: {buffer}, OldGroupData
 end
 
 local function RefreshPlayerGroups(Player: Player, GroupData: {buffer})
-	local NewGroupData = GetCurrentGroups(Player)
+	local NewGroupData, NewGroupDataAmount = GetCurrentGroups(Player)
 	
 	if Groups then
-		Spawn(RunCallbacks, Player, NewGroupData, GroupData)
+		Spawn(RunCallbacks, Player, NewGroupDataAmount, NewGroupData, GroupData)
 		PlayerCache[Player.UserId][2] = NewGroupData
 		return true
 	else
