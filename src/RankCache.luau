@@ -152,7 +152,10 @@ local function RunCallbacks(Player: Player, NewGroupDataAmount: number, NewGroup
 		local GroupId = buffer.readf64(DataBuffer, Offset)
 		Offset += 9 
 
-		if GroupId == 0 then continue end
+		if GroupId == 0 then 
+			Offset += 2
+			continue
+		end
 		local NewRank = buffer.readu8(DataBuffer, Offset)
 		Offset += 1
 		local OldRank = buffer.readu8(DataBuffer, Offset)
