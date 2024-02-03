@@ -34,17 +34,15 @@ type PlayerData = {
 }
 
 -- [1] = Callback
--- [2] == 1 = Specific, 2 = Global
+-- [2] = SpecificGroupId
 -- [3] == OptionalGroupIdSpeciferParam
 type CallbackData = {
 	["1"]: RankChangedCallback | GlobalRankChangedCallback,
-	["2"]: number,
-	["3"]: number?,
+	["2"]: number?,
 }
 
--- {[PlayerPosition] = PlayerData}
+-- {[UserId] = PlayerData}
 local PlayerCache = table.create(Players.MaxPlayers) :: {[number]: PlayerData}
-local PlayerPositions = table.create(Players.MaxPlayers) :: {Player}
 -- {[UserId] = {Thread}}
 local PlayerWaitingThreads = {} :: {[number]: {thread}}
 local RankChangedCallbacks = {} :: {CallbackData}
@@ -103,9 +101,8 @@ local function GetCurrentGroups(Player: Player): {buffer}
 end
 
 local function RunCallbacks(Player: Player, NewGroupData: {buffer}, OldGroupData: {buffer})
-	local GroupIdCount = math.abs(#NewGroupData - #OldGroupData) + #OldGroupData
 	-- 8 bytes for groupid, 1 byte for new rank, 1 byte for old rank
-	local DataBuffer = buffer.create(GroupIdCount * 10)
+	local DataBuffer = buffer.create((math.abs(#NewGroupData - #OldGroupData) + #OldGroupData) * 10)
 	local GroupIdsChecked = table.create(#NewGroupData)
 	local Offset = 0
 	local Index = 1
@@ -155,21 +152,21 @@ local function RunCallbacks(Player: Player, NewGroupData: {buffer}, OldGroupData
 		Offset += 1
 
 		for _, CallbackData in RankChangedCallbacks do
-			if CallbackData[3] == GroupId then
+			if CallbackData[2] == GroupId then
 				Spawn(Callback[1], Player, NewRank, OldRank)
-			elseif CallbackData[2] == 2 then
+			else
 				Spawn(Callback[1], GroupId, Player, NewRank, OldRank)
 			end
 		end
 	end
 end
 
-local function RefreshPlayerGroups(Player: Player, PlayerPosition: number, GroupData: {buffer})
+local function RefreshPlayerGroups(Player: Player, GroupData: {buffer})
 	local NewGroupData = GetCurrentGroups(Player)
 	
 	if Groups then
 		Spawn(RunCallbacks, Player, NewGroupData, GroupData)
-		PlayerCache[PlayerPosition][2] = NewGroupData
+		PlayerCache[Player.UserId][2] = NewGroupData
 		return true
 	else
 		return false
@@ -177,66 +174,45 @@ local function RefreshPlayerGroups(Player: Player, PlayerPosition: number, Group
 end
 
 local function OnPostSimulation(DeltaTime: number)
-	for Position, PlayerData in PlayerCache do
+	for Player, PlayerData in PlayerCache do
 		local Diffrence = (os.clock() - DeltaTime) - PlayerData[1]		
 
 		if Diffrence >= Config.GroupRefreshRate then
 			PlayerData[1] = os.clock()
-			Spawn(
-				RefreshPlayerGroups,
-				PlayerPositions[Position],
-				Position,
-				PlayerData[2]
-			)
+			Spawn(RefreshPlayerGroups, Player, PlayerData[2])
 		end
 	end
 end
 
 local function OnPlayerRemoving(Player: Player)
-	for Position, PlayerAtPosition in PlayerPositions do
-		if PlayerAtPosition == Player then
-			PlayerPositions[Position] = nil
-			break
-		end
-	end
+	PlayerCache[Player] = nil
 end
 
 local function OnPlayerAdded(Player: Player)
-	local ThreadsWaitingForPlayer = ThreadsWaitingForPlayers[Player.UserId]
 	local PlayerData = table.create(2)
-	local PlayerPosition
-
-	for Position, PlayerAtPosition in PlayerPositions do
-		if not PlayerAtPosition then
-			PlayerPositions[Position] = Player
-			PlayerPosition = Position
-			break
-		end
-	end
-
 	PlayerData[2] = GetCurrentGroups(Player)
 	PlayerData[1] = os.clock()
-	PlayerCache[PlayerPosition] = PlayerData
+
+	PlayerCache[Player.UserId] = PlayerData
+	local ThreadsWaitingForPlayer = ThreadsWaitingForPlayers[Player.UserId]
 
 	if ThreadsWaitingForPlayer then
 		for _, Thread in ThreadsWaitingForPlayer do
-			task.spawn(Thread, PlayerData, PlayerPosition)
+			task.spawn(Thread, PlayerData)
 		end
 		ThreadsWaitingForPlayers[Player.UserId] = nil
 	end
 	-- this is here just incase if the player doesnt get removed by the player removing callback
 	-- never had an issue with that, but it might happen so this is here
 	if not Player:IsDescendantOf(Players) then
-		PlayerPositions[PlayerPosition] = nil
+		PlayerCache[Player.UserId] = nil
 	end
 end
 
 -- Returns PlayerData, PlayerPosition
-local function GetPlayerData(Player: Player): (PlayerData?, number)
-	local PlayerPosition = table.find(PlayerPositions, Player)
-
-	if PlayerPosition then
-		return PlayerCache[PlayerPosition], PlayerPosition 
+local function GetPlayerData(Player: Player): PlayerData?
+	if PlayerCache[Player.UserId] then
+		return PlayerCache[Player.UserId]
 	elseif Player:IsDescendantOf(Players) then
 		local PlayerThreads = PlayerWaitingThreads[Player.UserId]
 
@@ -247,7 +223,7 @@ local function GetPlayerData(Player: Player): (PlayerData?, number)
 		end
 		return coroutine.yield()
 	else
-		return nil, -1
+		return nil
 	end
 end
 
@@ -270,33 +246,26 @@ local function GetRoleAndRank(Player: Player, GroupId: number?): (string, number
 end
 
 local OnRankChanged: OnRankChanged = function(CallbackOrGroupId, Callback)
-	local GroupId = if typeof(CallbackOrGroupId) == "function" then Config.DefualtGroupId else CallbackOrGroupId
-	local Callback = if typeof(CallbackOrGroupId) == "function" then CallbackOrGroupId else Callback
-	local IsGroupIdNotDefualt = GroupId ~= Config.DefualtGroupId
-			
-	local CallbackData = table.create(if IsGroupIdNotDefualt then 3 else 2) :: CallbackData
-	CallbackData[1] = Callback
-	CallbackData[2] = 1
+	local CallbackData = table.create(2) :: CallbackData
+	CallbackData[1] = if typeof(CallbackOrGroupId) == "function" then CallbackOrGroupId else Callback
+	CallbackData[2] = if typeof(CallbackOrGroupId) == "function" then Config.DefualtGroupId else CallbackOrGroupId
 
-	if IsGroupIdNotDefualt then
-		CallbackData[3] = GroupId
-	end
 	table.insert(RankChangedCallbacks, CallbackData)
 
 	return function()
 		local Index = table.find(RankChangedCallbacks, CallbackData)
-		table.remove(RankChangedCallbacks, Index)
+		RankChangedCallbacks[Index] = RankChangedCallbacks[#RankChangedCallbacks]
+		RankChangedCallbacks[#RankChangedCallbacks] = nil
 	end
 end
 
 local function GlobalOnRankChanged(Callback: GlobalRankChangedCallback)
-	local CallbackData = table.create(2) :: CallbackData
-	CallbackData[1] = Callback
-	CallbackData[2] = 2
+	local CallbackData = table.create(1, Callback) :: CallbackData
 
 	return function()
 		local Index = table.find(RankChangedCallbacks, CallbackData)
-		table.remove(RankChangedCallbacks, Index)
+		RankChangedCallbacks[Index] = RankChangedCallbacks[#RankChangedCallbacks]
+		RankChangedCallbacks[#RankChangedCallbacks] = nil
 	end
 end
 
@@ -346,11 +315,11 @@ local function GetRank(Player: Player, GroupId: number?): number
 end
 
 local function ForceRefresh(Player: Player): boolean
-	local PlayerData, PlayerPosition = GetPlayerData(Player)
+	local PlayerData = GetPlayerData(Player)
 
 	if PlayerData then
 		PlayerData[1] = os.clock()
-		return RefreshPlayerGroups(Player, PlayerPosition, PlayerData[2])
+		return RefreshPlayerGroups(Player, PlayerData[2])
 	else
 		return false
 	end
@@ -368,7 +337,7 @@ local function Init()
 	local AddedConnection = Players.PlayerAdded:Connect(OnPlayerAdded)
 
 	for _, Player in Players:GetPlayers() do
-		if table.find(PlayerPositions, Player) then continue end
+		if PlayerCache[Player.UserId] then continue end
 		Spawn(OnPlayerAdded, Player)
 	end
 
@@ -376,7 +345,7 @@ local function Init()
 		RemovingConnection:Disconnect()
 		RefreshConnection:Disconnect()
 		AddedConnection:Disconnect()
-		table.clear(PlayerPositions)
+		table.clear(PlayerCache)
 		HasInitiated = false
 	end
 end
