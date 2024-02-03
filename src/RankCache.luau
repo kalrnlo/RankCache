@@ -34,11 +34,12 @@ type PlayerData = {
 }
 
 -- [1] = Callback
--- [2] = SpecificGroupId
--- [3] == OptionalGroupIdSpeciferParam
+-- [2] = SpecificGroupId?
 type CallbackData = {
-	["1"]: RankChangedCallback | GlobalRankChangedCallback,
-	["2"]: number?,
+	["1"]: GlobalRankChangedCallback,
+} | {
+	["1"]: RankChangedCallback,
+	["2"]: number,
 }
 
 -- {[UserId] = PlayerData}
