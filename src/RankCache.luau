@@ -253,9 +253,13 @@ local OnRankChanged: OnRankChanged = function(CallbackOrGroupId, Callback)
 	table.insert(RankChangedCallbacks, CallbackData)
 
 	return function()
-		local Index = table.find(RankChangedCallbacks, CallbackData)
-		RankChangedCallbacks[Index] = RankChangedCallbacks[#RankChangedCallbacks]
-		RankChangedCallbacks[#RankChangedCallbacks] = nil
+		if #RankChangedCallbacks > 1 then
+			local Index = table.find(RankChangedCallbacks, CallbackData)
+			RankChangedCallbacks[Index] = RankChangedCallbacks[#RankChangedCallbacks]
+			RankChangedCallbacks[#RankChangedCallbacks] = nil
+		else
+			RankChangedCallbacks[1] = nil
+		end
 	end
 end
 
@@ -263,9 +267,13 @@ local function GlobalOnRankChanged(Callback: GlobalRankChangedCallback)
 	local CallbackData = table.create(1, Callback) :: CallbackData
 
 	return function()
-		local Index = table.find(RankChangedCallbacks, CallbackData)
-		RankChangedCallbacks[Index] = RankChangedCallbacks[#RankChangedCallbacks]
-		RankChangedCallbacks[#RankChangedCallbacks] = nil
+		if #RankChangedCallbacks > 1 then
+			local Index = table.find(RankChangedCallbacks, CallbackData)
+			RankChangedCallbacks[Index] = RankChangedCallbacks[#RankChangedCallbacks]
+			RankChangedCallbacks[#RankChangedCallbacks] = nil
+		else
+			RankChangedCallbacks[1] = nil
+		end
 	end
 end
 
