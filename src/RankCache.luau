@@ -19,6 +19,24 @@ export type GlobalRankChangedCallback = (GroupId: number, Player: Player, NewRan
 
 export type RankChangedCallback = (Player: Player, NewRank: number, OldRank: number) -> ()
 
+export type GroupInfo = {
+	Roles: {
+		{
+			Name: string,
+			Rank: number,
+		}
+	},
+	Owner: {
+		Name: string,
+		Id: number
+	},
+
+	Description: string,
+	EmblemUrl: string,
+	Name: string,
+	Id: number,
+}
+
 type RankCacheConfig = {
 	GroupRefreshRate: number,
 	DefualtGroupId: number,
@@ -91,10 +109,12 @@ local function SwapRemove(CallbackData: CallbackData)
 	end
 end
 
+local function GetGroupsAsync(Player: Player)
+	return GroupService:GetGroupsAsync(Player.UserId) :: GroupInfo
+end
+
 local function GetCurrentGroups(Player: Player): ({buffer}, number)
-	local Sucess, Groups = pcall(function(UserId: number)
-		return GroupService:GetGroupsAsync(UserId)
-	end, Player.UserId)
+	local Sucess, Groups = pcall(GetGroupsAsync, Player.UserId)
 	
 	if Sucess then
 		local NewGroupData = {} :: PlayerData
@@ -109,7 +129,7 @@ local function GetCurrentGroups(Player: Player): ({buffer}, number)
 		return NewGroupData, #Groups
 	else
 		warn(`[RankCache] GetCurrentGroups couldn't get groups for Player {Player.UserId}\n\tGetGroupsAsyncError: {Groups}`)
-		return table.create(1), 0
+		return {}, 0
 	end
 end
 
@@ -359,6 +379,7 @@ local function Init()
 		RemovingConnection:Disconnect()
 		RefreshConnection:Disconnect()
 		AddedConnection:Disconnect()
+		Player
 		for Player in PlayerCache do
 			PlayerCache[Player] = nil
 		end
