@@ -114,7 +114,7 @@ local function GetGroupsAsync(Player: Player)
 end
 
 local function GetCurrentGroups(Player: Player): ({buffer}, number)
-	local Sucess, Groups = pcall(GetGroupsAsync, Player.UserId)
+	local Sucess, Groups = pcall(GetGroupsAsync, Player)
 	
 	if Sucess then
 		local NewGroupData = {} :: PlayerData
@@ -379,7 +379,6 @@ local function Init()
 		RemovingConnection:Disconnect()
 		RefreshConnection:Disconnect()
 		AddedConnection:Disconnect()
-		Player
 		for Player in PlayerCache do
 			PlayerCache[Player] = nil
 		end
