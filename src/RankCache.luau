@@ -40,7 +40,7 @@ export type GroupInfo = {
 type RankCacheConfig = {
 	GroupRefreshRate: number,
 	DefualtGroupId: number,
-	[string] = nil
+	[string]: nil
 }
 
 -- GroupBufferFormat 
@@ -110,7 +110,7 @@ local function SwapRemove(CallbackData: CallbackData)
 end
 
 local function GetGroupsAsync(Player: Player)
-	return GroupService:GetGroupsAsync(Player.UserId) :: GroupInfo
+	return GroupService:GetGroupsAsync(Player.UserId)
 end
 
 local function GetCurrentGroups(Player: Player): ({buffer}, number)
@@ -139,7 +139,7 @@ local function RunCallbacks(Player: Player, NewGroupDataAmount: number, NewGroup
 	for _ in OldGroupData do
 		OldGroupDataAmount += 1
 	end
-	local GroupIdCount = (math.abs(NewGroupDataAmount - OldGroupDataAmount) + OldGroupDataAmount
+	local GroupIdCount = (math.abs(NewGroupDataAmount - OldGroupDataAmount) + OldGroupDataAmount)
 	local GroupIdsChecked = table.create(NewGroupDataAmount)
 	-- 8 bytes for groupid, 1 byte for new rank, 1 byte for old rank
 	local DataBuffer = buffer.create(GroupIdCount * 10)
@@ -192,9 +192,9 @@ local function RunCallbacks(Player: Player, NewGroupDataAmount: number, NewGroup
 
 		for _, CallbackData in RankChangedCallbacks do
 			if CallbackData[2] == GroupId then
-				Spawn(Callback[1], Player, NewRank, OldRank)
+				Spawn(CallbackData[1], Player, NewRank, OldRank)
 			else
-				Spawn(Callback[1], GroupId, Player, NewRank, OldRank)
+				Spawn(CallbackData[1], GroupId, Player, NewRank, OldRank)
 			end
 		end
 	end
@@ -203,7 +203,7 @@ end
 local function RefreshPlayerGroups(Player: Player, GroupData: {buffer})
 	local NewGroupData, NewGroupDataAmount = GetCurrentGroups(Player)
 	
-	if Groups then
+	if NewGroupData then
 		Spawn(RunCallbacks, Player, NewGroupDataAmount, NewGroupData, GroupData)
 		PlayerCache[Player][2] = NewGroupData
 		return true
@@ -228,18 +228,18 @@ local function OnPlayerRemoving(Player: Player)
 end
 
 local function OnPlayerAdded(Player: Player)
-	local PlayerData = table.create(2)
+	local PlayerData = table.create(2) :: PlayerData
 	PlayerData[2] = GetCurrentGroups(Player)
 	PlayerData[1] = os.clock()
 
 	PlayerCache[Player] = PlayerData
-	local ThreadsWaitingForPlayer = ThreadsWaitingForPlayers[Player.UserId]
+	local ThreadsWaitingForPlayer = PlayerWaitingThreads[Player.UserId]
 
 	if ThreadsWaitingForPlayer then
 		for _, Thread in ThreadsWaitingForPlayer do
 			task.spawn(Thread, PlayerData)
 		end
-		ThreadsWaitingForPlayers[Player.UserId] = nil
+		PlayerWaitingThreads[Player.UserId] = nil
 	end
 	-- this is here just incase if the player doesnt get removed by the player removing callback
 	-- never had an issue with that, but it might happen so this is here
@@ -267,11 +267,11 @@ local function GetPlayerData(Player: Player): PlayerData?
 end
 
 local function GetRoleAndRank(Player: Player, GroupId: number?): (string, number)
-	local GroupId = GroupId or Config.DefualtGroupId
+    local Id = GroupId or Config.DefualtGroupId
 	local PlayerData = GetPlayerData(Player)
 	
 	if PlayerData then
-		local GroupBuffer = PlayerData[2][GroupId]
+		local GroupBuffer = PlayerData[2][Id]
 
 		if GroupBuffer then
 			return buffer.readstring(GroupBuffer, 1, buffer.len(GroupBuffer) - 1), 
@@ -282,7 +282,7 @@ local function GetRoleAndRank(Player: Player, GroupId: number?): (string, number
 	return "Guest", 0
 end
 
-local OnRankChanged: OnRankChanged = function(CallbackOrGroupId, Callback)
+local OnRankChanged: OnRankChanged = function(CallbackOrGroupId: any, Callback: any?)
 	local CallbackData = table.create(2) :: CallbackData
 	CallbackData[1] = if typeof(CallbackOrGroupId) == "function" then CallbackOrGroupId else Callback
 	CallbackData[2] = if typeof(CallbackOrGroupId) == "function" then Config.DefualtGroupId else CallbackOrGroupId
@@ -304,11 +304,11 @@ local function GlobalOnRankChanged(Callback: GlobalRankChangedCallback)
 end
 
 local function IsInGroup(Player: Player, GroupId: number?): boolean
-	local GroupId = GroupId or Config.DefualtGroupId
+	local Id = GroupId or Config.DefualtGroupId
 	local PlayerData = GetPlayerData(Player)
 		
 	if PlayerData then
-		local GroupBuffer = PlayerData[2][GroupId]
+		local GroupBuffer = PlayerData[2][Id]
 	
 		if GroupBuffer then
 			return buffer.readu8(GroupBuffer, 0) > 0
@@ -319,11 +319,11 @@ local function IsInGroup(Player: Player, GroupId: number?): boolean
 end
 
 local function GetRole(Player: Player, GroupId: number?): string
-	local GroupId = GroupId or Config.DefualtGroupId
+	local Id = GroupId or Config.DefualtGroupId
 	local PlayerData = GetPlayerData(Player)
 		
 	if PlayerData then
-		local GroupBuffer = PlayerData[2][GroupId]
+		local GroupBuffer = PlayerData[2][Id]
 	
 		if GroupBuffer then
 			return buffer.readstring(GroupBuffer, 1, buffer.len(GroupBuffer) - 1)
@@ -334,11 +334,11 @@ local function GetRole(Player: Player, GroupId: number?): string
 end
 
 local function GetRank(Player: Player, GroupId: number?): number
-	local GroupId = GroupId or Config.DefualtGroupId
+	local Id = GroupId or Config.DefualtGroupId
 	local PlayerData = GetPlayerData(Player)
 		
 	if PlayerData then
-		local GroupBuffer = PlayerData[2][GroupId]
+		local GroupBuffer = PlayerData[2][Id]
 	
 		if GroupBuffer then
 			return buffer.readu8(GroupBuffer, 0)
