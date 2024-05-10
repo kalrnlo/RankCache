@@ -191,8 +191,12 @@ local function RunCallbacks(Player: Player, NewGroupDataAmount: number, NewGroup
 		Offset += 1
 
 		for _, CallbackData in RankChangedCallbacks do
-			if CallbackData[2] == GroupId then
-				Spawn(CallbackData[1], Player, NewRank, OldRank)
+			local CallbackGroupId = CallbackData[2]
+
+			if CallbackGroupId then
+				if CallbackGroupId == GroupId then
+					Spawn(CallbackData[1], Player, NewRank, OldRank)
+				end
 			else
 				Spawn(CallbackData[1], GroupId, Player, NewRank, OldRank)
 			end
